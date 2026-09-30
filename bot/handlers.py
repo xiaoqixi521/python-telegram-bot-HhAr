@@ -14,6 +14,7 @@ from telegram.ext import (
 )
 
 from bot import cache, db
+from bot.config import get_admin_ids
 from bot.tron import (
     get_account_info,
     get_contract_info,
@@ -41,6 +42,8 @@ BOT_COMMANDS = (
     ("transfer", "转账说明"),
     ("about", "关于机器人"),
     ("ping", "检查机器人状态"),
+    ("admin", "管理后台"),
+    ("myid", "查看我的ID"),
 )
 
 MENU_HELP = "帮助"
@@ -93,6 +96,84 @@ def _valid_address(value: str) -> bool:
 
 def _valid_txid(value: str) -> bool:
     return bool(TX_RE.fullmatch(value))
+
+
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
+    user = update.effective_user
+    if user and update.effective_message:
+        await update.effective_message.reply_text(f"你的 Telegram ID：{user.id}")
+
+
+def _is_admin(update: Update) -> bool:
+    user = update.effective_user
+    return bool(user and user.id in get_admin_ids())
+
+
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
+    message = update.effective_message
+    if message is None:
+        return
+    if not _is_admin(update):
+        await message.reply_text("⛔ 无管理权限。")
+        return
+
+    pool = context.bot_data.get(DB_KEY)
+    user_count = await db.count_users(pool) if pool is not None else 0
+    await message.reply_text(
+        "🛠 TRON Forge Bot 管理后台\n\n"
+        f"👥 用户总数：{user_count}\n"
+        "📡 机器人：在线\n\n"
+        "管理命令：\n"
+        "/admin_stats - 数据统计\n"
+        "/admin_users - 最近用户\n"
+        "/myid - 查看 Telegram ID\n\n"
+        "管理员身份通过 Railway 的 ADMIN_IDS 配置。"
+    )
+
+
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
+    if update.effective_message is None:
+        return
+    if not _is_admin(update):
+        await update.effective_message.reply_text("⛔ 无管理权限。")
+        return
+    pool = context.bot_data.get(DB_KEY)
+    if pool is None:
+        await update.effective_message.reply_text("数据库未连接。")
+        return
+    count = await db.count_users(pool)
+    await update.effective_message.reply_text(
+        "📊 管理统计\n\n"
+        f"用户总数：{count}\n"
+        "数据库：正常\nRedis："
+        f"{'正常' if context.bot_data.get(REDIS_KEY) is not None else '未连接'}"
+    )
+
+
+async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
+    if update.effective_message is None:
+        return
+    if not _is_admin(update):
+        await update.effective_message.reply_text("⛔ 无管理权限。")
+        return
+    pool = context.bot_data.get(DB_KEY)
+    if pool is None:
+        await update.effective_message.reply_text("数据库未连接。")
+        return
+    users = await db.recent_users(pool, 20)
+    if not users:
+        await update.effective_message.reply_text("暂无用户记录。")
+        return
+    lines = ["👥 最近用户\n"]
+    for i, user in enumerate(users, 1):
+        username = f"@{user['username']}" if user["username"] else "无用户名"
+        name = user["first_name"] or "未设置"
+        lines.append(f"{i}. {name} | {username}\nID：{user['telegram_id']}")
+    await update.effective_message.reply_text("\n".join(lines)[:4000])
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -541,6 +622,10 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("transfer", transfer))
     application.add_handler(CommandHandler("about", about))
     application.add_handler(CommandHandler("ping", ping))
+    application.add_handler(CommandHandler("admin", admin))
+    application.add_handler(CommandHandler("admin_stats", admin_stats))
+    application.add_handler(CommandHandler("admin_users", admin_users))
+    application.add_handler(CommandHandler("myid", myid))
     application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     application.add_handler(
         MessageHandler(
