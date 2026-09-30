@@ -646,6 +646,10 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if message is None or not message.text:
+        return
+
     pending = context.user_data.get("transactions_step")
     if pending == "wallet":
         address = message.text.strip()
