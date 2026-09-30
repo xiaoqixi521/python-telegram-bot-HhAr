@@ -656,43 +656,8 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not _valid_address(address):
             await message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
             return
-        try:
-            info = await get_account_info(address)
-            status = "已激活" if info["exists"] else "未发现账户数据"
-            try:
-                usdt = await get_usdt_balance(address)
-            except Exception as exc:
-                logger.warning("USDT balance query failed: %s", exc)
-                usdt = None
-            try:
-                activity = await get_recent_activity(address, 20)
-            except Exception as exc:
-                logger.warning("recent activity query failed: %s", exc)
-                activity = []
-            lines = [
-                "🪙 TRON 钱包",
-                "",
-                f"地址：{address}",
-                f"状态：{status}",
-                f"TRX余额：{info['balance']:.6f} TRX",
-                f"USDT余额：{usdt:,.6f} USDT" if usdt is not None else "USDT余额：暂时无法获取",
-                "",
-                f"📋 最近 {len(activity)} 笔交易",
-            ]
-            if activity:
-                for i, item in enumerate(activity, 1):
-                    txid = item.get("txid", "")
-                    short_txid = f"{txid[:10]}...{txid[-8:]}" if len(txid) > 18 else (txid or "未知")
-                    lines.append(
-                        f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')} | {item.get('status', 'UNKNOWN')}\\n"
-                        f"   {short_txid}"
-                    )
-            else:
-                lines.append("暂无已确认交易记录。")
-            await message.reply_text("\\n".join(lines)[:4000])
-        except Exception as exc:
-            logger.warning("wallet query failed: %s", exc)
-            await message.reply_text("查询失败，请稍后重试。")
+        context.user_data.pop("transactions_step", None)
+        await _transactions_result(update, address)
         return
 
     if pending == "token":
