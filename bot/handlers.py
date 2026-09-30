@@ -133,12 +133,26 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"👥 用户总数：{user_count}\n"
         "📡 机器人：在线\n"
         f"🗄 数据库：{db_status}\n\n"
-        "管理命令：\n"
-        "/admin_stats - 数据统计\n"
-        "/admin_users - 最近用户\n"
-        "/myid - 查看 Telegram ID\n\n"
-        "管理员：已授权"
+        "请选择管理功能：",
+        reply_markup=ReplyKeyboardMarkup(
+            [["📊 数据统计", "👥 用户管理"], ["🔙 返回主菜单"]],
+            resize_keyboard=True,
+            is_persistent=True,
+        ),
     )
+
+
+async def admin_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if message is None or not _is_admin(update):
+        return
+    text = message.text.strip()
+    if text == "📊 数据统计":
+        await admin_stats(update, context)
+    elif text == "👥 用户管理":
+        await admin_users(update, context)
+    elif text == "🔙 返回主菜单":
+        await start(update, context)
 
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -632,6 +646,12 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("admin_stats", admin_stats))
     application.add_handler(CommandHandler("admin_users", admin_users))
     application.add_handler(CommandHandler("myid", myid))
+    application.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(📊 数据统计|👥 用户管理|🔙 返回主菜单)$"),
+            admin_menu_button,
+        )
+    )
     application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     application.add_handler(
         MessageHandler(
