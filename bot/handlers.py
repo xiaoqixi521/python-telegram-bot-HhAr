@@ -336,7 +336,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     address = _arg(context)
     if not address:
-        context.user_data["pending"] = "wallet"
+        context.user_data["pending"] = "wallet_query"
         await update.effective_message.reply_text("请输入 TRON 钱包地址（T 开头）：")
         return
     if not _valid_address(address):
