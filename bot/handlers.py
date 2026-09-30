@@ -138,21 +138,40 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await query.answer()
     action = query.data or ""
     if action == "menu_wallet":
-        await query.message.reply_text("请输入：/wallet TRON钱包地址")
+        context.user_data["pending"] = "wallet_query"
+        await query.message.reply_text("请输入 TRON 钱包地址（T 开头）：")
     elif action == "menu_balance":
-        await query.message.reply_text("请输入：/balance TRON钱包地址")
+        context.user_data["pending"] = "wallet_query"
+        await query.message.reply_text("请输入 TRON 钱包地址（T 开头）：")
     elif action == "menu_token":
-        await query.message.reply_text("请输入：/token TRC-20合约地址")
+        context.user_data["pending"] = "token"
+        await query.message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
     elif action == "menu_tokenbalance":
-        await query.message.reply_text("请输入：/tokenbalance，然后按提示操作")
+        context.user_data.pop("pending", None)
+        context.user_data["tokenbalance_step"] = "wallet"
+        await query.message.reply_text("请输入要查询余额的 TRON 钱包地址（T 开头）：")
     elif action == "menu_transactions":
-        await query.message.reply_text("请输入：/transactions，然后按提示操作")
+        context.user_data.pop("pending", None)
+        context.user_data["transactions_step"] = "wallet"
+        await query.message.reply_text("请输入要查询交易记录的 TRON 钱包地址（T 开头）：")
     elif action == "menu_transaction":
-        await query.message.reply_text("请输入：/transaction 交易哈希")
+        context.user_data["pending"] = "transaction"
+        await query.message.reply_text("请输入 64 位 TRON 交易哈希：")
     elif action == "menu_create":
-        await query.message.reply_text("请输入：/create，然后按提示操作")
+        context.user_data.pop("pending", None)
+        context.user_data["create_step"] = "name"
+        context.user_data.pop("token_draft", None)
+        await query.message.reply_text(
+            "🛠 创建 TRC-20 代币\n\n"
+            "第 1 步 / 4\n请输入代币名称，例如：My Token"
+        )
     elif action == "menu_transfer":
-        await query.message.reply_text("请输入：/transfer 查看安全转账说明")
+        await query.message.reply_text(
+            "💸 TRC-20 转账\n\n"
+            "当前版本只提供安全引导，不接收或保存私钥。\n"
+            "实际转账应由你的钱包完成签名。\n\n"
+            "不要向机器人发送助记词或私钥。"
+        )
     elif action == "menu_about":
         await query.message.reply_text(
             "TRON Forge Bot\\nTRON / TRC-20 链上工具\\n"
@@ -654,14 +673,43 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if message is None or not message.text:
         return
 
-    pending = context.user_data.get("pending") or context.user_data.get("transactions_step")
+    tokenbalance_step = context.user_data.get("tokenbalance_step")
+    if tokenbalance_step == "wallet":
+        address = message.text.strip()
+        if not _valid_address(address):
+            await message.reply_text("钱包地址格式不正确，请重新输入 T 开头的地址。")
+            return
+        context.user_data["tokenbalance_wallet"] = address
+        context.user_data["tokenbalance_step"] = "contract"
+        await message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
+        return
+
+    if tokenbalance_step == "contract":
+        contract = message.text.strip()
+        wallet_address = context.user_data.pop("tokenbalance_wallet", "")
+        context.user_data.pop("tokenbalance_step", None)
+        await _tokenbalance_result(update, wallet_address, contract)
+        return
+
+    transactions_step = context.user_data.get("transactions_step")
+    if transactions_step == "wallet":
+        address = message.text.strip()
+        context.user_data.pop("transactions_step", None)
+        await _transactions_result(update, address)
+        return
+
+    if context.user_data.get("create_step"):
+        await handle_create_input(update, context)
+        return
+
+    pending = context.user_data.get("pending")
     if pending == "wallet_query":
         address = message.text.strip()
         if not _valid_address(address):
             await message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
             return
         context.user_data["wallet_input"] = address
-        context.user_data["pending"] = ""
+        context.user_data.pop("pending", None)
         await wallet(update, context)
         return
 
