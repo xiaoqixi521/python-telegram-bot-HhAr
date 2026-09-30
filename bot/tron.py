@@ -2,14 +2,20 @@
 
 import asyncio
 import json
+import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 TRONGRID_API = "https://api.trongrid.io"
+TRONGRID_API_KEY = os.getenv("TRONGRID_API_KEY", "").strip()
+BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
 def _get_json_sync(url: str) -> dict:
-    request = Request(url, headers={"Accept": "application/json"}, method="GET")
+    headers = {"Accept": "application/json"}
+    if TRONGRID_API_KEY:
+        headers["TRON-PRO-API-KEY"] = TRONGRID_API_KEY
+    request = Request(url, headers=headers, method="GET")
     try:
         with urlopen(request, timeout=15) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -26,7 +32,7 @@ def _post_json_sync(url: str, payload: dict) -> dict:
     request = Request(
         url,
         data=body,
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        headers=(lambda h: (h.update({"TRON-PRO-API-KEY": TRONGRID_API_KEY}) or h) if TRONGRID_API_KEY else h)({"Accept": "application/json", "Content-Type": "application/json"}),
         method="POST",
     )
     try:
@@ -127,26 +133,41 @@ async def get_transactions(address: str, limit: int = 10) -> list[dict]:
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 
 
-async def get_usdt_balance(address: str) -> float:
-    """Return confirmed USDT balance for a public TRON address."""
-    # Use the account aggregate endpoint first; it includes current TRC-20 holdings.
-    # Do not fall through to the balance extension when USDT is simply absent:
-    # that endpoint may require a TronGrid API key and would turn a real 0 into an error.
-    data = await _get_json(f"{TRONGRID_API}/v1/accounts/{address}")
-    accounts = data.get("data", [])
-    if accounts:
-        account = accounts[0]
-        holdings = account.get("trc20") or []
-        for item in holdings:
-            if not isinstance(item, dict):
-                continue
-            if USDT_CONTRACT in item:
-                try:
-                    return int(item[USDT_CONTRACT]) / 1_000_000
-                except (TypeError, ValueError):
-                    pass
+def _base58_decode(value: str) -> bytes:
+    number = 0
+    for char in value:
+        number = number * 58 + BASE58_ALPHABET.index(char)
+    raw = number.to_bytes((number.bit_length() + 7) // 8, "big") if number else b""
+    leading = len(value) - len(value.lstrip("1"))
+    return b"\\x00" * leading + raw
 
-    return 0.0
+
+def _tron_address_to_abi_hex(address: str) -> str:
+    raw = _base58_decode(address)
+    if len(raw) < 25:
+        raise ValueError("invalid TRON address")
+    payload = raw[:-4]
+    if len(payload) != 21 or payload[0] != 0x41:
+        raise ValueError("invalid TRON address")
+    return payload[1:].hex().rjust(64, "0")
+
+
+async def get_usdt_balance(address: str) -> float:
+    """Read USDT balance directly from the TRC-20 contract."""
+    result = await _post_json(
+        f"{TRONGRID_API}/wallet/triggerconstantcontract",
+        {
+            "owner_address": address,
+            "contract_address": USDT_CONTRACT,
+            "function_selector": "balanceOf(address)",
+            "parameter": _tron_address_to_abi_hex(address),
+            "visible": True,
+        },
+    )
+    values = result.get("constant_result") or []
+    if not values:
+        raise RuntimeError("TRC-20 balance query returned no result")
+    return int(values[0], 16) / 1_000_000
 
 
 async def get_recent_activity(address: str, limit: int = 20) -> list[dict]:
