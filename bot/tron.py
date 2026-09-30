@@ -76,3 +76,26 @@ async def get_trc20_balance(address: str, contract: str) -> dict:
                 "balance": item.get("balance") or "0",
             }
     return {"exists": False}
+
+
+async def get_transactions(address: str, limit: int = 10) -> list[dict]:
+    """Return recent TRX transactions for a public TRON address."""
+    data = await _get_json(
+        f"{TRONGRID_API}/v1/accounts/{address}/transactions"
+        f"?only_confirmed=true&limit={min(max(limit, 1), 20)}"
+    )
+    result = []
+    for tx in data.get("data", []):
+        txid = tx.get("txID", "")
+        block = tx.get("blockNumber", "未确认")
+        ret = tx.get("ret") or []
+        status = ret[0].get("contractRet") if ret else "UNKNOWN"
+        contracts = (tx.get("raw_data") or {}).get("contract") or []
+        contract_type = contracts[0].get("type", "未知") if contracts else "未知"
+        result.append({
+            "txid": txid,
+            "block": block,
+            "status": status,
+            "type": contract_type,
+        })
+    return result
