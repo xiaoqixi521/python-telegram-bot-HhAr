@@ -40,15 +40,20 @@ async def _post_json(url: str, payload: dict) -> dict:
     return await asyncio.to_thread(_post_json_sync, url, payload)
 
 async def get_account_info(address: str) -> dict:
-    data = await _get_json(f"{TRONGRID_API}/v1/accounts/{address}")
-    accounts = data.get("data", [])
-    if not accounts:
+    # Use the official FullNode account endpoint for the core wallet query.
+    # This avoids making the basic wallet lookup depend on TronGrid V1 indexing/API-key access.
+    data = await _post_json(
+        f"{TRONGRID_API}/wallet/getaccount",
+        {"address": address, "visible": True},
+    )
+    if data.get("Error"):
+        raise RuntimeError(str(data.get("Error")))
+    if not data.get("address"):
         return {"address": address, "balance": 0.0, "exists": False}
 
-    account = accounts[0]
     return {
         "address": address,
-        "balance": int(account.get("balance", 0)) / 1_000_000,
+        "balance": int(data.get("balance", 0)) / 1_000_000,
         "exists": True,
     }
 
