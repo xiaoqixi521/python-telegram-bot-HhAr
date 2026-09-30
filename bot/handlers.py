@@ -638,9 +638,11 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == MENU_HELP:
         await help_command(update, context)
     elif text == MENU_WALLET:
-        await message.reply_text("请输入：/wallet TRON地址")
+        context.user_data["pending"] = "wallet_query"
+        await message.reply_text("请输入 TRON 钱包地址（T 开头）：")
     elif text == MENU_TOKEN:
-        await message.reply_text("请输入：/token TRC-20合约地址")
+        context.user_data["pending"] = "token"
+        await message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
     elif text == MENU_ABOUT:
         await about(update, context)
     elif text == MENU_PING:
@@ -716,6 +718,9 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # 普通聊天消息不自动回复，避免用户每发一句话机器人就跟着回复。
     # 只有正在执行查询/创建等流程时，才由上面的 pending/step 逻辑处理。
+    user = update.effective_user
+    if user is None:
+        return
     client = context.bot_data.get(REDIS_KEY)
     if client is not None:
         await cache.increment_message_count(client, user.id)
