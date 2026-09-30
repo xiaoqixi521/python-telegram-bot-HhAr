@@ -66,3 +66,12 @@ async def count_users(pool: asyncpg.Pool) -> int:
 async def close_pool(pool: asyncpg.Pool) -> None:
     await pool.close()
     logger.info("PostgreSQL pool closed.")
+
+
+async def recent_users(pool: asyncpg.Pool, limit: int = 20) -> list[dict]:
+    rows = await pool.fetch(
+        """SELECT telegram_id, username, first_name, created_at, last_seen
+           FROM users ORDER BY last_seen DESC LIMIT $1""",
+        min(max(limit, 1), 50),
+    )
+    return [dict(row) for row in rows]
