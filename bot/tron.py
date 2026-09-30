@@ -99,3 +99,64 @@ async def get_transactions(address: str, limit: int = 10) -> list[dict]:
             "type": contract_type,
         })
     return result
+
+
+USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+
+
+async def get_usdt_balance(address: str) -> float:
+    """Return confirmed USDT balance for a public TRON address."""
+    data = await _get_json(
+        f"{TRONGRID_API}/v1/accounts/{address}/trc20/balance"
+        f"?only_confirmed=true&contract_address={USDT_CONTRACT}"
+    )
+    total = 0
+    for item in data.get("data", []):
+        if not isinstance(item, dict):
+            continue
+        # Current TronGrid shape is {contract_address: raw_balance}.
+        for contract, raw in item.items():
+            if contract == USDT_CONTRACT:
+                try:
+                    total += int(raw)
+                except (TypeError, ValueError):
+                    pass
+    return total / 1_000_000
+
+
+async def get_recent_activity(address: str, limit: int = 20) -> list[dict]:
+    """Return recent confirmed TRX/TRC-10 and TRC-20 transfers combined."""
+    limit = min(max(limit, 1), 20)
+    trx_data, trc20_data = await asyncio.gather(
+        _get_json(
+            f"{TRONGRID_API}/v1/accounts/{address}/transactions"
+            f"?only_confirmed=true&limit={limit}"
+        ),
+        _get_json(
+            f"{TRONGRID_API}/v1/accounts/{address}/transactions/trc20"
+            f"?only_confirmed=true&limit={limit}"
+        ),
+    )
+    result = []
+    for tx in trx_data.get("data", []):
+        contracts = ((tx.get("raw_data") or {}).get("contract") or [])
+        contract_type = contracts[0].get("type", "未知") if contracts else "未知"
+        ret = tx.get("ret") or []
+        result.append({
+            "txid": tx.get("txID", ""),
+            "timestamp": tx.get("block_timestamp") or 0,
+            "type": contract_type,
+            "status": (ret[0].get("contractRet") if ret else "UNKNOWN"),
+            "asset": "TRX/链上交易",
+        })
+    for tx in trc20_data.get("data", []):
+        token = tx.get("token_info") or {}
+        result.append({
+            "txid": tx.get("transaction_id", ""),
+            "timestamp": tx.get("block_timestamp") or 0,
+            "type": tx.get("type", "Transfer"),
+            "status": "SUCCESS" if tx.get("success", True) else "FAILED",
+            "asset": token.get("symbol") or token.get("name") or "TRC-20",
+        })
+    result.sort(key=lambda item: item.get("timestamp", 0), reverse=True)
+    return result[:limit]
