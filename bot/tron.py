@@ -18,8 +18,26 @@ def _get_json_sync(url: str) -> dict:
 
 
 async def _get_json(url: str) -> dict:
-    return await asyncio.to_thread(_get_json_sync, url)
+    return await asyncio.to_thread(_get_json_sync)
 
+
+def _post_json_sync(url: str, payload: dict) -> dict:
+    body = json.dumps(payload).encode("utf-8")
+    request = Request(
+        url,
+        data=body,
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError(f"TRON API request failed: {exc}") from exc
+
+
+async def _post_json(url: str, payload: dict) -> dict:
+    return await asyncio.to_thread(_post_json_sync, url, payload)
 
 async def get_account_info(address: str) -> dict:
     data = await _get_json(f"{TRONGRID_API}/v1/accounts/{address}")
@@ -36,18 +54,18 @@ async def get_account_info(address: str) -> dict:
 
 
 async def get_contract_info(address: str) -> dict:
-    data = await _get_json(f"{TRONGRID_API}/v1/contracts/{address}")
-    contracts = data.get("data", [])
-    if not contracts:
+    data = await _post_json(
+        f"{TRONGRID_API}/wallet/getcontract",
+        {"value": address, "visible": True},
+    )
+    if data.get("Error") or not data.get("contract_address"):
         return {"exists": False}
 
-    contract = contracts[0]
     return {
         "exists": True,
-        "owner_address": contract.get("owner_address"),
-        "type": contract.get("type") or "SmartContract",
+        "owner_address": data.get("origin_address"),
+        "type": "SmartContract",
     }
-
 
 async def get_transaction_info(txid: str) -> dict:
     data = await _get_json(f"{TRONGRID_API}/v1/transactions/{txid}")
