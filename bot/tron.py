@@ -176,16 +176,29 @@ async def get_usdt_balance(address: str) -> float:
 async def get_recent_activity(address: str, limit: int = 20) -> list[dict]:
     """Return recent confirmed TRX/TRC-10 and TRC-20 transfers combined."""
     limit = min(max(limit, 1), 20)
-    trx_data, trc20_data = await asyncio.gather(
-        _get_json(
+    trx_data = {}
+    trc20_data = {}
+    trx_ok = False
+    trc20_ok = False
+
+    try:
+        trx_data = await _get_json(
             f"{TRONGRID_API}/v1/accounts/{address}/transactions"
             f"?only_confirmed=true&limit={limit}"
-        ),
-        _get_json(
+        )
+        trx_ok = True
+    except Exception:
+        pass
+
+    try:
+        trc20_data = await _get_json(
             f"{TRONGRID_API}/v1/accounts/{address}/transactions/trc20"
             f"?only_confirmed=true&limit={limit}"
-        ),
-    )
+        )
+        trc20_ok = True
+    except Exception:
+        pass
+
     result = []
     for tx in trx_data.get("data", []):
         contracts = ((tx.get("raw_data") or {}).get("contract") or [])
@@ -207,5 +220,9 @@ async def get_recent_activity(address: str, limit: int = 20) -> list[dict]:
             "status": "SUCCESS" if tx.get("success", True) else "FAILED",
             "asset": token.get("symbol") or token.get("name") or "TRC-20",
         })
+
+    if not result and not (trx_ok or trc20_ok):
+        raise RuntimeError("TRON 交易历史接口暂时不可用")
+
     result.sort(key=lambda item: item.get("timestamp", 0), reverse=True)
     return result[:limit]
