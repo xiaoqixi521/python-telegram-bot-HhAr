@@ -10,6 +10,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
 )
 
@@ -44,6 +45,7 @@ BOT_COMMANDS = (
     ("ping", "检查机器人状态"),
     ("admin", "管理后台"),
     ("myid", "查看我的ID"),
+    ("menu", "打开功能菜单"),
     ("promo", "项目交流群"),
 )
 
@@ -98,6 +100,59 @@ def _valid_address(value: str) -> bool:
 def _valid_txid(value: str) -> bool:
     return bool(TX_RE.fullmatch(value))
 
+
+
+
+USER_MENU = InlineKeyboardMarkup([
+    [InlineKeyboardButton("💰 钱包查询", callback_data="menu_wallet"),
+     InlineKeyboardButton("💎 TRX余额", callback_data="menu_balance")],
+    [InlineKeyboardButton("🪙 代币查询", callback_data="menu_token"),
+     InlineKeyboardButton("💵 TRC-20余额", callback_data="menu_tokenbalance")],
+    [InlineKeyboardButton("📋 交易记录", callback_data="menu_transactions"),
+     InlineKeyboardButton("🔎 交易查询", callback_data="menu_transaction")],
+    [InlineKeyboardButton("🛠 创建代币", callback_data="menu_create"),
+     InlineKeyboardButton("💸 转账说明", callback_data="menu_transfer")],
+    [InlineKeyboardButton("ℹ️ 关于机器人", callback_data="menu_about"),
+     InlineKeyboardButton("🚀 项目交流群", callback_data="menu_promo")],
+])
+
+
+async def user_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            "🛠 TRON Forge Bot 功能菜单\n\n"
+            "请选择你需要的功能：",
+            reply_markup=USER_MENU,
+        )
+
+
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    action = query.data or ""
+    if action == "menu_wallet":
+        await query.message.reply_text("请输入：/wallet TRON钱包地址")
+    elif action == "menu_balance":
+        await query.message.reply_text("请输入：/balance TRON钱包地址")
+    elif action == "menu_token":
+        await query.message.reply_text("请输入：/token TRC-20合约地址")
+    elif action == "menu_tokenbalance":
+        await query.message.reply_text("请输入：/tokenbalance，然后按提示操作")
+    elif action == "menu_transactions":
+        await query.message.reply_text("请输入：/transactions，然后按提示操作")
+    elif action == "menu_transaction":
+        await query.message.reply_text("请输入：/transaction 交易哈希")
+    elif action == "menu_create":
+        await query.message.reply_text("请输入：/create，然后按提示操作")
+    elif action == "menu_transfer":
+        await query.message.reply_text("请输入：/transfer 查看安全转账说明")
+    elif action == "menu_about":
+        await about(query.message, context)
+    elif action == "menu_promo":
+        await group_promo(query.message, context)
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
@@ -665,6 +720,8 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("admin_users", admin_users))
     application.add_handler(CommandHandler("myid", myid))
     application.add_handler(CommandHandler("promo", group_promo))
+    application.add_handler(CommandHandler("menu", user_menu))
+    application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu_"))
     application.add_handler(
         MessageHandler(
             filters.Regex(r"^(📊 数据统计|👥 用户管理|🔙 返回主菜单)$"),
