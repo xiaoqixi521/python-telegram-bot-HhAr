@@ -411,7 +411,7 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         elif activity == []:
             lines.append("暂无已确认交易记录。")
         else:
-            lines.append("交易历史接口暂时无法获取，请配置 TronGrid API Key 后重试。")
+            lines.append("交易历史接口暂时无法获取，请稍后重试。")
         await update.effective_message.reply_text("\n".join(lines)[:4000])
     except Exception as exc:
         logger.warning("wallet query failed: %s", exc)
