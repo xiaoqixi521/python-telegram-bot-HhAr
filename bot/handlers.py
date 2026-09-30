@@ -137,7 +137,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/admin_stats - 数据统计\n"
         "/admin_users - 最近用户\n"
         "/myid - 查看 Telegram ID\n\n"
-        "管理员身份通过 Railway 的 ADMIN_IDS 配置。"
+        "管理员：已授权"
     )
 
 
