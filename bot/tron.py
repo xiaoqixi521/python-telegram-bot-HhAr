@@ -63,3 +63,16 @@ async def get_transaction_info(txid: str) -> dict:
         "status": status or "已提交",
         "block_number": tx.get("blockNumber") or "未确认",
     }
+
+
+async def get_trc20_balance(address: str, contract: str) -> dict:
+    data = await _get_json(f"{TRONGRID_API}/v1/accounts/{address}/tokens?only_confirmed=true")
+    for item in data.get("data", []):
+        if item.get("address") == contract:
+            return {
+                "exists": True,
+                "symbol": item.get("symbol") or "UNKNOWN",
+                "decimals": int(item.get("decimals") or 0),
+                "balance": item.get("balance") or "0",
+            }
+    return {"exists": False}
