@@ -211,13 +211,75 @@ async def transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def create_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    del context
+    context.user_data["create_step"] = "name"
+    context.user_data.pop("token_draft", None)
     await update.effective_message.reply_text(
         "🛠 创建 TRC-20 代币\n\n"
-        "目前机器人先提供安全引导，不在服务器保存私钥。\n"
-        "准备好名称、Symbol、精度和总供应量后，可以通过你自己的钱包签名部署合约。\n\n"
-        "⚠️ 不要把助记词、私钥或钱包验证码发送给机器人。"
+        "第 1 步 / 4\n请输入代币名称，例如：My Token"
     )
+
+
+async def handle_create_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    message = update.effective_message
+    if message is None or not message.text:
+        return False
+
+    step = context.user_data.get("create_step")
+    if not step:
+        return False
+
+    value = message.text.strip()
+    draft = context.user_data.setdefault("token_draft", {})
+
+    if step == "name":
+        if not 1 <= len(value) <= 50:
+            await message.reply_text("名称长度应为 1-50 个字符，请重新输入。")
+            return True
+        draft["name"] = value
+        context.user_data["create_step"] = "symbol"
+        await message.reply_text("第 2 步 / 4\n请输入代币 Symbol，例如：TFO")
+        return True
+
+    if step == "symbol":
+        symbol = value.upper()
+        if not re.fullmatch(r"[A-Z0-9]{1,12}", symbol):
+            await message.reply_text("Symbol 只能使用 1-12 位英文字母或数字，请重新输入。")
+            return True
+        draft["symbol"] = symbol
+        context.user_data["create_step"] = "decimals"
+        await message.reply_text("第 3 步 / 4\n请输入精度，例如：6")
+        return True
+
+    if step == "decimals":
+        if not value.isdigit() or not 0 <= int(value) <= 18:
+            await message.reply_text("精度请输入 0-18 的整数，例如：6")
+            return True
+        draft["decimals"] = int(value)
+        context.user_data["create_step"] = "supply"
+        await message.reply_text("第 4 步 / 4\n请输入总供应量，例如：10000000")
+        return True
+
+    if step == "supply":
+        if not re.fullmatch(r"\d+(?:\.\d+)?", value):
+            await message.reply_text("总供应量请输入数字，例如：10000000")
+            return True
+        if float(value) <= 0:
+            await message.reply_text("总供应量必须大于 0，请重新输入。")
+            return True
+        draft["supply"] = value
+        context.user_data.pop("create_step", None)
+        await message.reply_text(
+            "✅ 参数已收集\n\n"
+            f"名称：{draft['name']}\n"
+            f"Symbol：{draft['symbol']}\n"
+            f"精度：{draft['decimals']}\n"
+            f"总供应量：{draft['supply']}\n\n"
+            "下一步可以生成 TRC-20 合约部署材料。\n"
+            "部署交易需要由你的钱包签名。机器人不会索取或保存私钥。"
+        )
+        return True
+
+    return False
 
 
 async def transfer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -272,6 +334,8 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await handle_create_input(update, context):
+        return
     message = update.effective_message
     user = update.effective_user
     if message is None or not message.text or user is None:
