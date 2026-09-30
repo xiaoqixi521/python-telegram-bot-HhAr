@@ -658,6 +658,7 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
         context.user_data.pop("transactions_step", None)
         await _transactions_result(update, address)
+        context.user_data["pending"] = ""
         return
 
     if pending == "token":
