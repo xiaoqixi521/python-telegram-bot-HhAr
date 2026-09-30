@@ -106,10 +106,10 @@ USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 
 async def get_usdt_balance(address: str) -> float:
     """Return confirmed USDT balance for a public TRON address."""
-    # Use the account aggregate endpoint first; it includes TRC-20 holdings.
-    data = await _get_json(
-        f"{TRONGRID_API}/v1/accounts/{address}?only_confirmed=true"
-    )
+    # Use the account aggregate endpoint first; it includes current TRC-20 holdings.
+    # Do not fall through to the balance extension when USDT is simply absent:
+    # that endpoint may require a TronGrid API key and would turn a real 0 into an error.
+    data = await _get_json(f"{TRONGRID_API}/v1/accounts/{address}")
     accounts = data.get("data", [])
     if accounts:
         account = accounts[0]
@@ -123,19 +123,7 @@ async def get_usdt_balance(address: str) -> float:
                 except (TypeError, ValueError):
                     pass
 
-    # Fallback to the dedicated TRC-20 balance endpoint.
-    data = await _get_json(
-        f"{TRONGRID_API}/v1/accounts/{address}/trc20/balance"
-        f"?only_confirmed=true&contract_address={USDT_CONTRACT}"
-    )
-    total = 0
-    for item in data.get("data", []):
-        if isinstance(item, dict) and USDT_CONTRACT in item:
-            try:
-                total += int(item[USDT_CONTRACT])
-            except (TypeError, ValueError):
-                pass
-    return total / 1_000_000
+    return 0.0
 
 
 async def get_recent_activity(address: str, limit: int = 20) -> list[dict]:
