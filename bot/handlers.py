@@ -355,7 +355,7 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             activity = await get_recent_activity(address, 20)
         except Exception as exc:
             logger.warning("recent activity query failed: %s", exc)
-            activity = []
+            activity = None
 
         lines = [
             "🪙 TRON 钱包",
@@ -365,7 +365,7 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"TRX余额：{info['balance']:.6f} TRX",
             f"USDT余额：{usdt:,.6f} USDT" if usdt is not None else "USDT余额：暂时无法获取",
             "",
-            f"📋 最近 {len(activity)} 笔交易",
+            f"📋 最近 {len(activity)} 笔交易" if activity is not None else "📋 最近交易：暂时无法获取",
         ]
         if activity:
             for i, item in enumerate(activity, 1):
@@ -375,8 +375,10 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')} | {item.get('status', 'UNKNOWN')}\n"
                     f"   {short_txid}"
                 )
-        else:
+        elif activity == []:
             lines.append("暂无已确认交易记录。")
+        else:
+            lines.append("交易历史接口暂时无法获取，请配置 TronGrid API Key 后重试。")
         await update.effective_message.reply_text("\n".join(lines)[:4000])
     except Exception as exc:
         logger.warning("wallet query failed: %s", exc)
