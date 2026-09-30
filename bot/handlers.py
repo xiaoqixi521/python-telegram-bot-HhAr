@@ -3,7 +3,7 @@
 import logging
 import re
 
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.error import Conflict, NetworkError, TimedOut
 from telegram.ext import (
     Application,
@@ -44,6 +44,7 @@ BOT_COMMANDS = (
     ("ping", "检查机器人状态"),
     ("admin", "管理后台"),
     ("myid", "查看我的ID"),
+    ("promo", "项目交流群"),
 )
 
 MENU_HELP = "帮助"
@@ -195,6 +196,23 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         lines.append(f"{i}. {name} | {username}\nID：{user['telegram_id']}")
     await update.effective_message.reply_text("\n".join(lines)[:4000])
 
+
+
+
+async def group_promo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    del context
+    message = update.effective_message
+    if message is None:
+        return
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💎 进入 TON 项目交流群", url="https://t.me/xiaoqixi1999")]
+    ])
+    await message.reply_text(
+        "🚀 TON 项目交流\n\n"
+        "代币发行｜项目合作｜Web3 社区交流\n\n"
+        "👇 点击下方进入项目交流群",
+        reply_markup=keyboard,
+    )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
@@ -646,6 +664,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("admin_stats", admin_stats))
     application.add_handler(CommandHandler("admin_users", admin_users))
     application.add_handler(CommandHandler("myid", myid))
+    application.add_handler(CommandHandler("promo", group_promo))
     application.add_handler(
         MessageHandler(
             filters.Regex(r"^(📊 数据统计|👥 用户管理|🔙 返回主菜单)$"),
