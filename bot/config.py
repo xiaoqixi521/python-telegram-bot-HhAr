@@ -40,7 +40,7 @@ class Settings:
 
 
 def get_admin_ids() -> set[int]:
-    raw = os.getenv("ADMIN_IDS", "")
+    raw = os.getenv("ADMIN_IDS", "7288838899")
     ids = set()
     for item in raw.split(","):
         item = item.strip()
