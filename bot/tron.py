@@ -174,54 +174,63 @@ async def get_usdt_balance(address: str) -> float:
 
 
 async def get_recent_activity(address: str, limit: int = 20) -> list[dict]:
-    """Return recent confirmed TRX/TRC-10 and TRC-20 transfers combined."""
-    limit = min(max(limit, 1), 20)
-    trx_data = {}
-    trc20_data = {}
-    trx_ok = False
-    trc20_ok = False
+    """Return recent confirmed TRX and TRC-20 activity."""
+    limit = min(max(limit, 1), 200)
+    result = []
 
+    # TRX / TRC-10 history
     try:
-        trx_data = await _get_json(
+        data = await _get_json(
             f"{TRONGRID_API}/v1/accounts/{address}/transactions"
             f"?only_confirmed=true&limit={limit}"
         )
-        trx_ok = True
+        for tx in data.get("data", []):
+            contracts = ((tx.get("raw_data") or {}).get("contract") or [])
+            contract_type = contracts[0].get("type", "未知") if contracts else "未知"
+            ret = tx.get("ret") or []
+            result.append({
+                "txid": tx.get("txID", ""),
+                "timestamp": tx.get("block_timestamp") or 0,
+                "type": contract_type,
+                "status": (ret[0].get("contractRet") if ret else "UNKNOWN"),
+                "asset": "TRX/链上交易",
+            })
     except Exception:
         pass
 
+    # USDT / TRC-20 history. TronGrid supports up to 200 per page and
+    # fingerprint pagination; keep fetching until we have enough records.
+    fingerprint = None
+    pages = 0
     try:
-        trc20_data = await _get_json(
-            f"{TRONGRID_API}/v1/accounts/{address}/transactions/trc20"
-            f"?only_confirmed=true&limit={limit}"
-        )
-        trc20_ok = True
+        while len(result) < limit and pages < 5:
+            params = (
+                f"only_confirmed=true&limit=200"
+                f"&contract_address={USDT_CONTRACT}"
+            )
+            if fingerprint:
+                params += f"&fingerprint={fingerprint}"
+            data = await _get_json(
+                f"{TRONGRID_API}/v1/accounts/{address}/transactions/trc20?{params}"
+            )
+            items = data.get("data", [])
+            for tx in items:
+                token = tx.get("token_info") or {}
+                result.append({
+                    "txid": tx.get("transaction_id", ""),
+                    "timestamp": tx.get("block_timestamp") or 0,
+                    "type": tx.get("type", "Transfer"),
+                    "status": "SUCCESS" if tx.get("success", True) else "FAILED",
+                    "asset": token.get("symbol") or token.get("name") or "USDT",
+                })
+            pages += 1
+            fingerprint = (data.get("meta") or {}).get("fingerprint")
+            if not items or not fingerprint:
+                break
     except Exception:
         pass
 
-    result = []
-    for tx in trx_data.get("data", []):
-        contracts = ((tx.get("raw_data") or {}).get("contract") or [])
-        contract_type = contracts[0].get("type", "未知") if contracts else "未知"
-        ret = tx.get("ret") or []
-        result.append({
-            "txid": tx.get("txID", ""),
-            "timestamp": tx.get("block_timestamp") or 0,
-            "type": contract_type,
-            "status": (ret[0].get("contractRet") if ret else "UNKNOWN"),
-            "asset": "TRX/链上交易",
-        })
-    for tx in trc20_data.get("data", []):
-        token = tx.get("token_info") or {}
-        result.append({
-            "txid": tx.get("transaction_id", ""),
-            "timestamp": tx.get("block_timestamp") or 0,
-            "type": tx.get("type", "Transfer"),
-            "status": "SUCCESS" if tx.get("success", True) else "FAILED",
-            "asset": token.get("symbol") or token.get("name") or "TRC-20",
-        })
-
-    if not result and not (trx_ok or trc20_ok):
+    if not result:
         raise RuntimeError("TRON 交易历史接口暂时不可用")
 
     result.sort(key=lambda item: item.get("timestamp", 0), reverse=True)
