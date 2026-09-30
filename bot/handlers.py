@@ -104,6 +104,19 @@ def _valid_txid(value: str) -> bool:
     return bool(TX_RE.fullmatch(value))
 
 
+def _reset_flow(context: ContextTypes.DEFAULT_TYPE) -> None:
+    for key in (
+        "pending",
+        "wallet_input",
+        "tokenbalance_step",
+        "tokenbalance_wallet",
+        "transactions_step",
+        "create_step",
+        "token_draft",
+    ):
+        context.user_data.pop(key, None)
+
+
 
 
 USER_MENU = InlineKeyboardMarkup([
@@ -137,6 +150,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     await query.answer()
     action = query.data or ""
+    _reset_flow(context)
     if action == "menu_wallet":
         context.user_data["pending"] = "wallet_query"
         await query.message.reply_text("请输入 TRON 钱包地址（T 开头）：")
@@ -654,6 +668,7 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     text = message.text.strip()
+    _reset_flow(context)
     if text == MENU_HELP:
         await help_command(update, context)
     elif text == MENU_WALLET:
