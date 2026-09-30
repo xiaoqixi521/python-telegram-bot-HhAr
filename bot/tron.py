@@ -19,7 +19,13 @@ def _get_json_sync(url: str) -> dict:
     try:
         with urlopen(request, timeout=15) as response:
             return json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError) as exc:
+    except HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"TRON API HTTP {exc.code}: {detail[:300]}") from exc
+    except (URLError, TimeoutError) as exc:
         raise RuntimeError(f"TRON API request failed: {exc}") from exc
 
 
