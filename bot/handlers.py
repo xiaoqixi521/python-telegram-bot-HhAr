@@ -651,6 +651,16 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     pending = context.user_data.get("pending") or context.user_data.get("transactions_step")
+    if pending == "wallet_query":
+        address = message.text.strip()
+        if not _valid_address(address):
+            await message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
+            return
+        context.user_data["wallet_input"] = address
+        context.user_data["pending"] = ""
+        await wallet(update, context)
+        return
+
     if pending == "wallet":
         address = message.text.strip()
         if not _valid_address(address):
