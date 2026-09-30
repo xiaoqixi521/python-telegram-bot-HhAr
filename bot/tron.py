@@ -1,0 +1,65 @@
+"""Read-only TRON / TRC-20 public API helpers."""
+
+import asyncio
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+TRONGRID_API = "https://api.trongrid.io"
+
+
+def _get_json_sync(url: str) -> dict:
+    request = Request(url, headers={"Accept": "application/json"}, method="GET")
+    try:
+        with urlopen(request, timeout=15) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError(f"TRON API request failed: {exc}") from exc
+
+
+async def _get_json(url: str) -> dict:
+    return await asyncio.to_thread(_get_json_sync, url)
+
+
+async def get_account_info(address: str) -> dict:
+    data = await _get_json(f"{TRONGRID_API}/v1/accounts/{address}")
+    accounts = data.get("data", [])
+    if not accounts:
+        return {"address": address, "balance": 0.0, "exists": False}
+
+    account = accounts[0]
+    return {
+        "address": address,
+        "balance": int(account.get("balance", 0)) / 1_000_000,
+        "exists": True,
+    }
+
+
+async def get_contract_info(address: str) -> dict:
+    data = await _get_json(f"{TRONGRID_API}/v1/contracts/{address}")
+    contracts = data.get("data", [])
+    if not contracts:
+        return {"exists": False}
+
+    contract = contracts[0]
+    return {
+        "exists": True,
+        "owner_address": contract.get("owner_address"),
+        "type": contract.get("type") or "SmartContract",
+    }
+
+
+async def get_transaction_info(txid: str) -> dict:
+    data = await _get_json(f"{TRONGRID_API}/v1/transactions/{txid}")
+    transactions = data.get("data", [])
+    if not transactions:
+        return {"exists": False}
+
+    tx = transactions[0]
+    ret = tx.get("ret") or []
+    status = ret[0].get("contractRet") if ret else None
+    return {
+        "exists": True,
+        "status": status or "已提交",
+        "block_number": tx.get("blockNumber") or "未确认",
+    }
