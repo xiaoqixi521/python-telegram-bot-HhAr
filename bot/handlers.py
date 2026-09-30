@@ -114,6 +114,7 @@ USER_MENU = InlineKeyboardMarkup([
      InlineKeyboardButton("💸 转账说明", callback_data="menu_transfer")],
     [InlineKeyboardButton("ℹ️ 关于机器人", callback_data="menu_about"),
      InlineKeyboardButton("🚀 项目交流群", callback_data="menu_promo")],
+    [InlineKeyboardButton("⚡ TRX 能量租赁", callback_data="menu_energy")],
 ])
 
 
@@ -153,6 +154,27 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await about(query.message, context)
     elif action == "menu_promo":
         await group_promo(query.message, context)
+    elif action == "menu_energy":
+        await energy_rental_info(query.message)
+
+async def energy_rental_info(message) -> None:
+    if message is None:
+        return
+    await message.reply_text(
+        "⚡ TRX 能量租赁\\n\\n"
+        "当前为自营能量租赁功能规划版。\\n\\n"
+        "服务流程：\\n"
+        "1️⃣ 选择 Energy 套餐\\n"
+        "2️⃣ 选择租赁时长\\n"
+        "3️⃣ 提交你的 TRON 收款/使用地址\\n"
+        "4️⃣ 确认付款后代理 Energy\\n"
+        "5️⃣ 到期后回收代理资源\\n\\n"
+        "💡 当前 1000 TRX 作为能量池规划资金。\\n"
+        "实际可提供的 Energy 数量会随 TRON 全网质押量变化。\\n\\n"
+        "🔐 不需要向机器人提供助记词或私钥。\\n"
+        "正式开放前会先完成套餐、价格、订单和付款确认模块。"
+    )
+
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
