@@ -1,5 +1,6 @@
 """Telegram update handlers."""
 
+import asyncio
 import logging
 import re
 
@@ -343,12 +344,18 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        info, usdt, activity = await __import__("asyncio").gather(
-            get_account_info(address),
-            get_usdt_balance(address),
-            get_recent_activity(address, 20),
-        )
+        info = await get_account_info(address)
         status = "已激活" if info["exists"] else "未发现账户数据"
+        try:
+            usdt = await get_usdt_balance(address)
+        except Exception as exc:
+            logger.warning("USDT balance query failed: %s", exc)
+            usdt = None
+        try:
+            activity = await get_recent_activity(address, 20)
+        except Exception as exc:
+            logger.warning("recent activity query failed: %s", exc)
+            activity = []
 
         lines = [
             "🪙 TRON 钱包",
@@ -356,7 +363,7 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"地址：{address}",
             f"状态：{status}",
             f"TRX余额：{info['balance']:.6f} TRX",
-            f"USDT余额：{usdt:,.6f} USDT",
+            f"USDT余额：{usdt:,.6f} USDT" if usdt is not None else "USDT余额：暂时无法获取",
             "",
             f"📋 最近 {len(activity)} 笔交易",
         ]
@@ -365,13 +372,11 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 txid = item.get("txid", "")
                 short_txid = f"{txid[:10]}...{txid[-8:]}" if len(txid) > 18 else (txid or "未知")
                 lines.append(
-                    f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')}"
-                    f" | {item.get('status', 'UNKNOWN')}\n"
+                    f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')} | {item.get('status', 'UNKNOWN')}\n"
                     f"   {short_txid}"
                 )
         else:
             lines.append("暂无已确认交易记录。")
-
         await update.effective_message.reply_text("\n".join(lines)[:4000])
     except Exception as exc:
         logger.warning("wallet query failed: %s", exc)
@@ -648,19 +653,25 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
             return
         try:
-            info, usdt, activity = await __import__("asyncio").gather(
-                get_account_info(address),
-                get_usdt_balance(address),
-                get_recent_activity(address, 20),
-            )
+            info = await get_account_info(address)
             status = "已激活" if info["exists"] else "未发现账户数据"
+            try:
+                usdt = await get_usdt_balance(address)
+            except Exception as exc:
+                logger.warning("USDT balance query failed: %s", exc)
+                usdt = None
+            try:
+                activity = await get_recent_activity(address, 20)
+            except Exception as exc:
+                logger.warning("recent activity query failed: %s", exc)
+                activity = []
             lines = [
                 "🪙 TRON 钱包",
                 "",
                 f"地址：{address}",
                 f"状态：{status}",
                 f"TRX余额：{info['balance']:.6f} TRX",
-                f"USDT余额：{usdt:,.6f} USDT",
+                f"USDT余额：{usdt:,.6f} USDT" if usdt is not None else "USDT余额：暂时无法获取",
                 "",
                 f"📋 最近 {len(activity)} 笔交易",
             ]
@@ -669,8 +680,7 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     txid = item.get("txid", "")
                     short_txid = f"{txid[:10]}...{txid[-8:]}" if len(txid) > 18 else (txid or "未知")
                     lines.append(
-                        f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')}"
-                        f" | {item.get('status', 'UNKNOWN')}\\n"
+                        f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')} | {item.get('status', 'UNKNOWN')}\\n"
                         f"   {short_txid}"
                     )
             else:
