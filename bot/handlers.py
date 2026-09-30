@@ -22,6 +22,8 @@ from bot.tron import (
     get_transaction_info,
     get_trc20_balance,
     get_transactions,
+    get_usdt_balance,
+    get_recent_activity,
 )
 
 logger = logging.getLogger(__name__)
@@ -341,14 +343,36 @@ async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        info = await get_account_info(address)
-        status = "已激活" if info["exists"] else "未发现账户数据"
-        await update.effective_message.reply_text(
-            f"🪙 TRON 钱包\n\n"
-            f"地址：{address}\n"
-            f"状态：{status}\n"
-            f"TRX余额：{info['balance']:.6f} TRX"
+        info, usdt, activity = await __import__("asyncio").gather(
+            get_account_info(address),
+            get_usdt_balance(address),
+            get_recent_activity(address, 20),
         )
+        status = "已激活" if info["exists"] else "未发现账户数据"
+
+        lines = [
+            "🪙 TRON 钱包",
+            "",
+            f"地址：{address}",
+            f"状态：{status}",
+            f"TRX余额：{info['balance']:.6f} TRX",
+            f"USDT余额：{usdt:,.6f} USDT",
+            "",
+            f"📋 最近 {len(activity)} 笔交易",
+        ]
+        if activity:
+            for i, item in enumerate(activity, 1):
+                txid = item.get("txid", "")
+                short_txid = f"{txid[:10]}...{txid[-8:]}" if len(txid) > 18 else (txid or "未知")
+                lines.append(
+                    f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')}"
+                    f" | {item.get('status', 'UNKNOWN')}\n"
+                    f"   {short_txid}"
+                )
+        else:
+            lines.append("暂无已确认交易记录。")
+
+        await update.effective_message.reply_text("\n".join(lines)[:4000])
     except Exception as exc:
         logger.warning("wallet query failed: %s", exc)
         await update.effective_message.reply_text("查询失败，请稍后重试。")
