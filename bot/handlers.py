@@ -151,9 +151,20 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     elif action == "menu_transfer":
         await query.message.reply_text("请输入：/transfer 查看安全转账说明")
     elif action == "menu_about":
-        await about(query.message, context)
+        await query.message.reply_text(
+            "TRON Forge Bot\\nTRON / TRC-20 链上工具\\n"
+            "支持钱包、余额、合约和交易公开信息查询。"
+        )
     elif action == "menu_promo":
-        await group_promo(query.message, context)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💎 进入 TON 项目交流群", url="https://t.me/xiaoqixi1999")]
+        ])
+        await query.message.reply_text(
+            "🚀 TON 项目交流\\n\\n"
+            "代币发行｜项目合作｜Web3 社区交流\\n\\n"
+            "👇 点击下方进入项目交流群",
+            reply_markup=keyboard,
+        )
     elif action == "menu_energy":
         await energy_rental_info(query.message)
 
