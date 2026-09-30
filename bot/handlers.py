@@ -121,10 +121,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     address = _arg(context)
+    if not address:
+        context.user_data["pending"] = "wallet"
+        await update.effective_message.reply_text("请输入 TRON 钱包地址（T 开头）：")
+        return
     if not _valid_address(address):
-        await update.effective_message.reply_text(
-            "用法：/wallet T开头的TRON地址\n\n例如：/wallet T... "
-        )
+        await update.effective_message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
         return
 
     try:
@@ -147,6 +149,10 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     address = _arg(context)
+    if not address:
+        context.user_data["pending"] = "token"
+        await update.effective_message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
+        return
     if not _valid_address(address):
         await update.effective_message.reply_text(
             "用法：/token TRC-20合约地址"
@@ -175,6 +181,10 @@ async def token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     txid = _arg(context)
+    if not txid:
+        context.user_data["pending"] = "transaction"
+        await update.effective_message.reply_text("请输入 64 位 TRON 交易哈希：")
+        return
     if not _valid_txid(txid):
         await update.effective_message.reply_text(
             "用法：/transaction 64位交易哈希"
@@ -265,6 +275,65 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     message = update.effective_message
     user = update.effective_user
     if message is None or not message.text or user is None:
+        return
+
+    pending = context.user_data.pop("pending", None)
+    if pending == "wallet":
+        address = message.text.strip()
+        if not _valid_address(address):
+            await message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
+            return
+        try:
+            info = await get_account_info(address)
+            status = "已激活" if info["exists"] else "未发现账户数据"
+            await message.reply_text(
+                f"🪙 TRON 钱包\n\n地址：{address}\n状态：{status}\n"
+                f"TRX余额：{info['balance']:.6f} TRX"
+            )
+        except Exception as exc:
+            logger.warning("wallet query failed: %s", exc)
+            await message.reply_text("查询失败，请稍后重试。")
+        return
+
+    if pending == "token":
+        address = message.text.strip()
+        if not _valid_address(address):
+            await message.reply_text("TRC-20 合约地址格式不正确，请重新发送 T 开头的地址。")
+            return
+        try:
+            info = await get_contract_info(address)
+            if not info.get("exists"):
+                await message.reply_text(f"未找到公开合约信息。\n合约：{address}")
+            else:
+                await message.reply_text(
+                    "🪙 TRC-20 合约\n\n"
+                    f"合约地址：{address}\n合约存在：是\n"
+                    f"所有者：{info.get('owner_address') or '未知'}\n"
+                    f"类型：{info.get('type') or '智能合约'}"
+                )
+        except Exception as exc:
+            logger.warning("token query failed: %s", exc)
+            await message.reply_text("合约查询失败，请稍后重试。")
+        return
+
+    if pending == "transaction":
+        txid = message.text.strip()
+        if not _valid_txid(txid):
+            await message.reply_text("交易哈希格式不正确，请发送 64 位十六进制交易哈希。")
+            return
+        try:
+            info = await get_transaction_info(txid)
+            if not info.get("exists"):
+                await message.reply_text(f"未找到交易。\n哈希：{txid}")
+            else:
+                await message.reply_text(
+                    "🔎 TRON 交易\n\n"
+                    f"哈希：{txid}\n状态：{info.get('status', '未知')}\n"
+                    f"区块：{info.get('block_number', '未确认')}"
+                )
+        except Exception as exc:
+            logger.warning("transaction query failed: %s", exc)
+            await message.reply_text("交易查询失败，请稍后重试。")
         return
 
     client = context.bot_data.get(REDIS_KEY)
