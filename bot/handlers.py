@@ -797,3 +797,4 @@ def register_handlers(application: Application) -> None:
         )
     )
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_message))
+
