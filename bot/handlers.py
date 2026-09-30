@@ -643,47 +643,39 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     pending = context.user_data.get("transactions_step")
     if pending == "wallet":
-        value = update.effective_message.text.strip() if update.effective_message and update.effective_message.text else ""
-        context.user_data.pop("transactions_step", None)
-        await _transactions_result(update, value)
-        return
-
-    pending = context.user_data.get("tokenbalance_step")
-    if pending:
-        value = update.effective_message.text.strip() if update.effective_message and update.effective_message.text else ""
-        if pending == "wallet":
-            if not _valid_address(value):
-                await update.effective_message.reply_text("钱包地址格式不正确，请重新发送 T 开头的地址。")
-                return
-            context.user_data["tokenbalance_wallet"] = value
-            context.user_data["tokenbalance_step"] = "contract"
-            await update.effective_message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
-            return
-        wallet_address = context.user_data.pop("tokenbalance_wallet", "")
-        context.user_data.pop("tokenbalance_step", None)
-        await _tokenbalance_result(update, wallet_address, value)
-        return
-
-    if await handle_create_input(update, context):
-        return
-    message = update.effective_message
-    user = update.effective_user
-    if message is None or not message.text or user is None:
-        return
-
-    pending = context.user_data.pop("pending", None)
-    if pending == "wallet":
         address = message.text.strip()
         if not _valid_address(address):
             await message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
             return
         try:
-            info = await get_account_info(address)
-            status = "已激活" if info["exists"] else "未发现账户数据"
-            await message.reply_text(
-                f"🪙 TRON 钱包\n\n地址：{address}\n状态：{status}\n"
-                f"TRX余额：{info['balance']:.6f} TRX"
+            info, usdt, activity = await __import__("asyncio").gather(
+                get_account_info(address),
+                get_usdt_balance(address),
+                get_recent_activity(address, 20),
             )
+            status = "已激活" if info["exists"] else "未发现账户数据"
+            lines = [
+                "🪙 TRON 钱包",
+                "",
+                f"地址：{address}",
+                f"状态：{status}",
+                f"TRX余额：{info['balance']:.6f} TRX",
+                f"USDT余额：{usdt:,.6f} USDT",
+                "",
+                f"📋 最近 {len(activity)} 笔交易",
+            ]
+            if activity:
+                for i, item in enumerate(activity, 1):
+                    txid = item.get("txid", "")
+                    short_txid = f"{txid[:10]}...{txid[-8:]}" if len(txid) > 18 else (txid or "未知")
+                    lines.append(
+                        f"{i}. {item.get('asset', 'TRC-20')} | {item.get('type', 'Transfer')}"
+                        f" | {item.get('status', 'UNKNOWN')}\\n"
+                        f"   {short_txid}"
+                    )
+            else:
+                lines.append("暂无已确认交易记录。")
+            await message.reply_text("\\n".join(lines)[:4000])
         except Exception as exc:
             logger.warning("wallet query failed: %s", exc)
             await message.reply_text("查询失败，请稍后重试。")
