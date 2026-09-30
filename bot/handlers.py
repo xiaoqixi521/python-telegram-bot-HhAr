@@ -650,7 +650,7 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if message is None or not message.text:
         return
 
-    pending = context.user_data.get("transactions_step")
+    pending = context.user_data.get("pending") or context.user_data.get("transactions_step")
     if pending == "wallet":
         address = message.text.strip()
         if not _valid_address(address):
