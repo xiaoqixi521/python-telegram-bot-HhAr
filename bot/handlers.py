@@ -706,12 +706,14 @@ async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await message.reply_text("交易查询失败，请稍后重试。")
         return
 
+    # 普通聊天消息不自动回复，避免用户每发一句话机器人就跟着回复。
+    # 只有正在执行查询/创建等流程时，才由上面的 pending/step 逻辑处理。
     client = context.bot_data.get(REDIS_KEY)
     if client is not None:
-        count = await cache.increment_message_count(client, user.id)
+        await cache.increment_message_count(client, user.id)
     else:
-        count = _LOCAL_MESSAGE_COUNTS[user.id] = _LOCAL_MESSAGE_COUNTS.get(user.id, 0) + 1
-    await message.reply_text(f"收到第 {count} 条消息：\n{message.text}")
+        _LOCAL_MESSAGE_COUNTS[user.id] = _LOCAL_MESSAGE_COUNTS.get(user.id, 0) + 1
+    return
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
