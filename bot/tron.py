@@ -29,10 +29,13 @@ async def _get_json(url: str) -> dict:
 
 def _post_json_sync(url: str, payload: dict) -> dict:
     body = json.dumps(payload).encode("utf-8")
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if TRONGRID_API_KEY:
+        headers["TRON-PRO-API-KEY"] = TRONGRID_API_KEY
     request = Request(
         url,
         data=body,
-        headers=(lambda h: (h.update({"TRON-PRO-API-KEY": TRONGRID_API_KEY}) or h) if TRONGRID_API_KEY else h)({"Accept": "application/json", "Content-Type": "application/json"}),
+        headers=headers,
         method="POST",
     )
     try:
