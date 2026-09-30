@@ -37,3 +37,13 @@ class Settings:
             redis_url=redis_url,
             log_level=log_level,
         )
+
+
+def get_admin_ids() -> set[int]:
+    raw = os.getenv("ADMIN_IDS", "")
+    ids = set()
+    for item in raw.split(","):
+        item = item.strip()
+        if item.isdigit():
+            ids.add(int(item))
+    return ids
