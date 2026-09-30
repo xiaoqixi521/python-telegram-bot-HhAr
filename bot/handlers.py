@@ -19,6 +19,7 @@ from bot.tron import (
     get_contract_info,
     get_transaction_info,
     get_trc20_balance,
+    get_transactions,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ BOT_COMMANDS = (
     ("token", "查询TRC-20合约"),
     ("transaction", "查询交易"),
     ("tokenbalance", "查询TRC-20余额"),
+    ("transactions", "查询钱包交易"),
     ("create", "创建代币说明"),
     ("transfer", "转账说明"),
     ("about", "关于机器人"),
@@ -251,6 +253,39 @@ async def _tokenbalance_result(update: Update, wallet_address: str, contract: st
         await update.effective_message.reply_text("代币余额查询失败，请稍后重试。")
 
 
+async def transactions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    address = _arg(context)
+    if not address:
+        context.user_data["transactions_step"] = "wallet"
+        await update.effective_message.reply_text("请输入要查询交易记录的 TRON 钱包地址（T 开头）：")
+        return
+    await _transactions_result(update, address)
+
+
+async def _transactions_result(update: Update, address: str) -> None:
+    if not _valid_address(address):
+        await update.effective_message.reply_text("TRON 地址格式不正确，请重新发送 T 开头的地址。")
+        return
+    try:
+        items = await get_transactions(address, 10)
+        if not items:
+            await update.effective_message.reply_text("这个地址暂时没有可查询的已确认交易记录。")
+            return
+
+        lines = [f"📋 最近 {len(items)} 笔交易\n", f"钱包：{address}\n"]
+        for i, item in enumerate(items, 1):
+            lines.append(
+                f"{i}. {item['type']}\n"
+                f"状态：{item['status']}  区块：{item['block']}\n"
+                f"哈希：{item['txid']}\n"
+            )
+        text = "\n".join(lines)
+        await update.effective_message.reply_text(text[:4000])
+    except Exception as exc:
+        logger.warning("transactions query failed: %s", exc)
+        await update.effective_message.reply_text("交易记录查询失败，请稍后重试。")
+
+
 async def create_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data["create_step"] = "name"
     context.user_data.pop("token_draft", None)
@@ -375,6 +410,13 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    pending = context.user_data.get("transactions_step")
+    if pending == "wallet":
+        value = update.effective_message.text.strip() if update.effective_message and update.effective_message.text else ""
+        context.user_data.pop("transactions_step", None)
+        await _transactions_result(update, value)
+        return
+
     pending = context.user_data.get("tokenbalance_step")
     if pending:
         value = update.effective_message.text.strip() if update.effective_message and update.effective_message.text else ""
@@ -494,6 +536,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("token", token))
     application.add_handler(CommandHandler("transaction", transaction))
     application.add_handler(CommandHandler("tokenbalance", tokenbalance))
+    application.add_handler(CommandHandler("transactions", transactions))
     application.add_handler(CommandHandler("create", create_token))
     application.add_handler(CommandHandler("transfer", transfer))
     application.add_handler(CommandHandler("about", about))
