@@ -18,6 +18,7 @@ from bot.tron import (
     get_account_info,
     get_contract_info,
     get_transaction_info,
+    get_trc20_balance,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ BOT_COMMANDS = (
     ("balance", "查询TRX余额"),
     ("token", "查询TRC-20合约"),
     ("transaction", "查询交易"),
+    ("tokenbalance", "查询TRC-20余额"),
     ("create", "创建代币说明"),
     ("transfer", "转账说明"),
     ("about", "关于机器人"),
@@ -210,6 +212,45 @@ async def transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.effective_message.reply_text("交易查询失败，请稍后重试。")
 
 
+async def tokenbalance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        context.user_data["tokenbalance_step"] = "wallet"
+        await update.effective_message.reply_text("请输入要查询余额的 TRON 钱包地址（T 开头）：")
+        return
+    if len(context.args) == 1:
+        wallet_address = context.args[0]
+        if not _valid_address(wallet_address):
+            await update.effective_message.reply_text("钱包地址格式不正确，请重新输入。")
+            return
+        context.user_data["tokenbalance_wallet"] = wallet_address
+        context.user_data["tokenbalance_step"] = "contract"
+        await update.effective_message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
+        return
+    await _tokenbalance_result(update, context.args[0], context.args[1])
+
+
+async def _tokenbalance_result(update: Update, wallet_address: str, contract: str) -> None:
+    if not _valid_address(wallet_address) or not _valid_address(contract):
+        await update.effective_message.reply_text("钱包地址或合约地址格式不正确。")
+        return
+    try:
+        info = await get_trc20_balance(wallet_address, contract)
+        if not info.get("exists"):
+            await update.effective_message.reply_text("未找到该钱包持有的这个 TRC-20 代币余额。")
+            return
+        decimals = info["decimals"]
+        raw = int(info["balance"])
+        amount = raw / (10 ** decimals) if decimals else raw
+        await update.effective_message.reply_text(
+            "💰 TRC-20 余额\n\n"
+            f"钱包：{wallet_address}\n代币：{info['symbol']}\n"
+            f"余额：{amount:,.{min(decimals, 8)}f}\n合约：{contract}"
+        )
+    except Exception as exc:
+        logger.warning("token balance query failed: %s", exc)
+        await update.effective_message.reply_text("代币余额查询失败，请稍后重试。")
+
+
 async def create_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data["create_step"] = "name"
     context.user_data.pop("token_draft", None)
@@ -334,6 +375,22 @@ async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    pending = context.user_data.get("tokenbalance_step")
+    if pending:
+        value = update.effective_message.text.strip() if update.effective_message and update.effective_message.text else ""
+        if pending == "wallet":
+            if not _valid_address(value):
+                await update.effective_message.reply_text("钱包地址格式不正确，请重新发送 T 开头的地址。")
+                return
+            context.user_data["tokenbalance_wallet"] = value
+            context.user_data["tokenbalance_step"] = "contract"
+            await update.effective_message.reply_text("请输入 TRC-20 合约地址（T 开头）：")
+            return
+        wallet_address = context.user_data.pop("tokenbalance_wallet", "")
+        context.user_data.pop("tokenbalance_step", None)
+        await _tokenbalance_result(update, wallet_address, value)
+        return
+
     if await handle_create_input(update, context):
         return
     message = update.effective_message
@@ -436,6 +493,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("balance", balance))
     application.add_handler(CommandHandler("token", token))
     application.add_handler(CommandHandler("transaction", transaction))
+    application.add_handler(CommandHandler("tokenbalance", tokenbalance))
     application.add_handler(CommandHandler("create", create_token))
     application.add_handler(CommandHandler("transfer", transfer))
     application.add_handler(CommandHandler("about", about))
