@@ -111,7 +111,6 @@ def _is_admin(update: Update) -> bool:
 
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    del context
     message = update.effective_message
     if message is None:
         return
@@ -134,7 +133,6 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    del context
     if update.effective_message is None:
         return
     if not _is_admin(update):
@@ -154,7 +152,6 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    del context
     if update.effective_message is None:
         return
     if not _is_admin(update):
